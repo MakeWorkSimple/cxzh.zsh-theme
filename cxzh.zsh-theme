@@ -4,47 +4,59 @@
 setopt prompt_subst
 
 () {
-RETVAL=$?
-local PR_USER PR_USER_OP PR_PROMPT PR_HOST
 
-# Check the UID
-if [[ $UID -ne 0 ]]; then # normal user
-  PR_USER='%F{green}%n%f'
-  PR_USER_OP='%F{green}%#%f'
-  PR_PROMPT='%f➤ %f'
-else # root
-  PR_USER='%F{red}%n%f'
-  PR_USER_OP='%F{red}%#%f'
-  PR_PROMPT='%F{red}➤ %f'
-fi
+}
 
-# Check if we are on SSH or not
-if [[ -n "$SSH_CLIENT"  ||  -n "$SSH2_CLIENT" ]]; then
-  PR_HOST='%F{red}%M%f' # SSH
-else
-  PR_HOST=''
-  # PR_HOST='%F{green}%M%f' # no SSH
-fi
+prompt_end(){
+  echo -n "
+╰─"
+}
 
 
-local return_code="%(?..%F{red}%? ↵%f)"
-if [[ -z $PR_HOST ]]; then
-    local user_host="${PR_USER}%F{cyan}"
-else
-    local user_host="${PR_USER}%F{cyan}@${PR_HOST}"
-fi
-# local user_host="${PR_USER}%F{cyan}@${PR_HOST}"
-local current_dir="%B%F{blue}%~%f%b"
-local rvm_ruby=''
-if ${HOME}/.rvm/bin/rvm-prompt &> /dev/null; then # detect user-local rvm installation
-  rvm_ruby='%F{red}‹$(${HOME}/.rvm/bin/rvm-prompt i v g s)›%f'
-elif which rvm-prompt &> /dev/null; then # detect system-wide rvm installation
-  rvm_ruby='%F{red}‹$(rvm-prompt i v g s)›%f'
-elif which rbenv &> /dev/null; then # detect Simple Ruby Version Management
-  rvm_ruby='%F{red}‹$(rbenv version | sed -e "s/ (set.*$//")›%f'
-fi
+prompt_status(){
+  if [[ $UID -ne 0 ]]; then # normal user
+    ARROW_PROMPT='%f➤ %f'
+  else # root
+    ARROW_PROMPT='%f➤ %f'
+  fi
+  local symbols
+  symbols=()
+  [[ $RETVAL -ne 0 ]] && symbols+="%{%F{red}%}✘"
+  [[ $UID -eq 0 ]] && symbols+="%{%F{yellow}%}⚡"
+  [[ $(jobs -l | wc -l) -gt 0 ]] && symbols+="%{%F{cyan}%}⚙"
+  symbols+="${ARROW_PROMPT}"
+  symbols=$(IFS='' ; echo "${symbols[*]}")
+  echo -n "$symbols"
+}
 
-# Git: branch/detached head, dirty status
+
+prompt_user_host(){ 
+  if [[ $UID -ne 0 ]]; then # normal user
+    PR_USER='%F{green}%n%f'
+    PR_USER_OP='%F{green}%#%f'
+  else # root
+    PR_USER='%F{red}%n%f'
+    PR_USER_OP='%F{red}%#%f'
+  fi
+
+  if [[ -n "$SSH_CLIENT"  ||  -n "$SSH2_CLIENT" ]]; then
+    PR_HOST='%F{red}%M%f' # SSH
+  else
+    PR_HOST=''
+  fi
+
+  if [[ -z $PR_HOST ]]; then
+      local user_host="${PR_USER}%F{cyan}"
+  else
+      local user_host="${PR_USER}%F{cyan}@${PR_HOST}"
+  fi
+  echo -n "╭─${user_host} "
+}
+prompt_dir(){ 
+  current_dir="%B%F{blue}%~%f%b"
+  echo -n "${current_dir} "
+}
+
 prompt_git() {
   (( $+commands[git] )) || return
   local PL_BRANCH_CHAR
@@ -85,17 +97,37 @@ prompt_git() {
   fi
 }
 
-
-local git_branch='$(prompt_git)'
-# echo $git_branch
-# origin
-PROMPT="╭─${user_host} ${current_dir} ${rvm_ruby} ${git_branch}
-╰─$PR_PROMPT"
-# local pr_prompt='$(prompt_status)'
-# PROMPT="╭─${user_host} ${current_dir} ${rvm_ruby} ${git_branch}
-# ╰─${pr_prompt} "
-RPROMPT="${return_code}"
-
-ZSH_THEME_GIT_PROMPT_PREFIX="%F{yellow}‹"
-ZSH_THEME_GIT_PROMPT_SUFFIX="› %f"
+prompt_rvm_ruby(){
+  local rvm_ruby=''
+  if ${HOME}/.rvm/bin/rvm-prompt &> /dev/null; then # detect user-local rvm installation
+    rvm_ruby='%F{red}‹$(${HOME}/.rvm/bin/rvm-prompt i v g s)›%f'
+  elif which rvm-prompt &> /dev/null; then # detect system-wide rvm installation
+    rvm_ruby='%F{red}‹$(rvm-prompt i v g s)›%f'
+  elif which rbenv &> /dev/null; then # detect Simple Ruby Version Management
+    rvm_ruby='%F{red}‹$(rbenv version | sed -e "s/ (set.*$//")›%f'
+  fi
+  echo -n "${rvm_ruby}"
 }
+
+prompt_virtualenv() {
+  local virtualenv_path="$VIRTUAL_ENV"
+  if [[ -n $virtualenv_path && -n $VIRTUAL_ENV_DISABLE_PROMPT ]]; then
+    prompt_segment blue black "(`basename $virtualenv_path`)"
+  fi
+}
+
+build_prompt() {
+  RETVAL=$?
+  prompt_user_host
+  prompt_dir
+  prompt_rvm_ruby
+  prompt_virtualenv
+  prompt_git
+  # prompt_hg
+  prompt_end
+  prompt_status
+  
+}
+
+PROMPT='%{%f%b%k%}$(build_prompt)'
+RPROMPT='%(?..%F{red}%? ↵%f)'
