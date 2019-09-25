@@ -106,7 +106,11 @@ prompt_rvm_ruby(){
   elif which rbenv &> /dev/null; then # detect Simple Ruby Version Management
     rvm_ruby='%F{red}‹$(rbenv version | sed -e "s/ (set.*$//")›%f'
   fi
-  echo -n "${rvm_ruby}"
+  if [[ -n rvm_ruby ]];then
+    echo -n "${rvm_ruby} "
+  else
+    echo -n ""
+  fi
 }
 
 prompt_virtualenv() {
